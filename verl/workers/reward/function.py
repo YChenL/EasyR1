@@ -123,6 +123,7 @@ class BatchFunctionRewardManager(FunctionRewardManager):
                     "response": response_str,
                     "response_length": cur_response_length,
                     "ground_truth": data.non_tensor_batch["ground_truth"][i],
+                    "target_instances": data.non_tensor_batch["target_instances"][i],
                 }
             )
 

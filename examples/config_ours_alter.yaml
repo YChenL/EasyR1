@@ -77,7 +77,7 @@ worker:
   ref:
     fsdp:
       enable_full_shard: true
-      enable_cpu_offload: true  # true: more CPU memory; false: more GPU memory
+      enable_cpu_offload: false  # true: more CPU memory; false: more GPU memory
       enable_rank0_init: true
     offload:
       offload_params: false
@@ -91,15 +91,15 @@ trainer:
   max_steps: null
   project_name: easy_r1
   experiment_name: qwen2_5_7b_treebench_grpo
-  logger: ["file", "wandb"]
+  logger: ["file"]
   nnodes: 1
-  n_gpus_per_node: 8
+  n_gpus_per_node: 4
   max_try_make_batch: 20  # -1 means no limit
-  val_freq: 5  # -1 to disable
+  val_freq: 20  # -1 to disable
   val_before_train: true
   val_only: false
   val_generations_to_log: 3
-  save_freq: 5  # -1 to disable
+  save_freq: 50  # -1 to disable
   save_limit: 3  # -1 to disable
   save_model_only: false
   save_checkpoint_path: null
