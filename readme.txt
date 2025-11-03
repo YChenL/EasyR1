@@ -10,5 +10,10 @@ Revisions
 
 Quick Start
 Step1: 把数据集https://huggingface.co/datasets/HaochenWang/TreeVGR-RL-37K下载到/data/TreeVGR-RL-37K (里面应该包含一个jsonl的数据集文件和一个images文件夹用来存图像源文件)
+
 Step2: 把模型权重https://huggingface.co/HaochenWang/TreeVGR-7B-CI下载/model/TreeVGR-7B-CI
-Step3: 运行examples/qwen2_5_7b_treebench_grpo.sh
+       把https://huggingface.co/Qwen/Qwen2.5-VL-32B-Instruct下载到model/Qwen2.5-32B-Instruct
+
+Step3: 运行server/vllm_server.sh; 拉起vllm服务，维护一个reward model对模型输出进行打分;
+       进一个新端口，运行examples/qwen2_5_7b_treebench_grpo.sh
+

@@ -307,6 +307,7 @@ class RLHFDataset(Dataset):
         example["attention_mask"] = attention_mask
         example["position_ids"] = position_ids
         example["raw_prompt_ids"] = raw_prompt_ids
+        example["question"] = example.pop(self.prompt_key)
         example["ground_truth"] = example.pop(self.answer_key)
         example["target_instances"] = example.pop(self.target_key)
         return example

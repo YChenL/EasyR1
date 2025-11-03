@@ -88,26 +88,97 @@ def parse_bboxes(value: Union[str, list]) -> List[List[float]]:
             continue
     return bboxes
 
+# =========================
+# 仿射传输奖励的辅助函数
+# =========================
+
+def _bbox_to_cxcywh(b: List[float]) -> tuple[float, float, float, float]:
+    """[x1,y1,x2,y2] -> (cx, cy, w, h)，并确保 w,h 非负。"""
+    x1, y1, x2, y2 = map(float, b)
+    w = max(0.0, x2 - x1)
+    h = max(0.0, y2 - y1)
+    cx = 0.5 * (x1 + x2)
+    cy = 0.5 * (y1 + y2)
+    return cx, cy, w, h
+
+
+def _transport_similarity(pred: List[float],
+                          gt: List[float],
+                          *,
+                          alpha: float = 1.0,
+                          beta: float = 1.0,
+                          gamma: float = 0.0,
+                          eps: float = 1e-6) -> float:
+    """
+    基于“把 B_p 通过仿射 T 搬运到 B_t”的思想定义连续相似度：
+      - 线性部分 A = diag(sx, sy)，其中 sx = wt/wp, sy = ht/hp
+      - 平移向量 t = (tx, ty) = (cx_t - sx*cx_p, cy_t - sy*cy_p)
+      - 平移代价用  ||t|| / (r_p + r_t)  归一化，r 为外接圆半径
+      - 尺度代价用 ||log(A)||_F = sqrt( (log sx)^2 + (log sy)^2 )
+      - 可选纵横比代价 |log sx - log sy|
+
+    能量：E = α*d_norm^2 + β*||log A||_F^2 + γ*Δ_ar^2
+    相似度：R = exp(-E)，范围 (0,1]
+    """
+    cxp, cyp, wp, hp = _bbox_to_cxcywh(pred)
+    cxt, cyt, wt, ht = _bbox_to_cxcywh(gt)
+
+    # 避免 0 尺度导致除零 / log(0)
+    wp = max(wp, eps)
+    hp = max(hp, eps)
+    wt = max(wt, eps)
+    ht = max(ht, eps)
+
+    # 线性缩放（各向异性）
+    sx, sy = wt / wp, ht / hp
+
+    # 仿射平移（按原点缩放后再平移）
+    tx = cxt - sx * cxp
+    ty = cyt - sy * cyp
+
+    # 用外接圆半径和进行尺度无关的平移归一化
+    rp = 0.5 * math.hypot(wp, hp)
+    rt = 0.5 * math.hypot(wt, ht)
+    d_norm = math.hypot(tx, ty) / max(rp + rt, eps)
+
+    # 尺度/形状项：放大与缩小对称（log 惩罚）
+    log_sx = math.log(max(sx, eps))
+    log_sy = math.log(max(sy, eps))
+    size_cost_sq = log_sx * log_sx + log_sy * log_sy
+
+    # 可选：纵横比差（同样使用 log 对称）
+    ar_cost_sq = (log_sx - log_sy) * (log_sx - log_sy)
+
+    # 组合能量与相似度
+    E = alpha * (d_norm ** 2) + beta * size_cost_sq + gamma * ar_cost_sq
+    # 数值安全：避免 inf/NaN 造成崩溃
+    if not math.isfinite(E):
+        return 0.0
+    R = math.exp(-E)
+    # clamp 到 (0,1]
+    if R < 0.0:
+        R = 0.0
+    elif R > 1.0:
+        R = 1.0
+    return R
+
 
 def visual_reward(response: str, target_boxes: list) -> float:
     """
-    Compute the dual-IoU visual reward exactly as in TreeVGR §4.2:
-      R_IoU = 0.5 * (Recall_IoU + Precision_IoU)
-    where:
-      Recall_IoU   = (1/M) * sum_k max_i IoU(pred_i, gt_k)
-      Precision_IoU= (1/N) * sum_i max_k IoU(gt_k, pred_i)
+    基于“仿射传输 T”的双侧视觉奖励：
+      R = 0.5 * (Recall + Precision)
+    其中单对相似度 sim(pred, gt) 由 _transport_similarity 定义，兼顾中心位移与尺度/形状差异，
+    并对所有距离提供非零、平滑的梯度信号。
 
-    - response: model output string containing <box>[x1,y1,x2,y2]</box> tags
-    - target_boxes: list of GT boxes [[x1,y1,x2,y2], ...]
-
-    Returns:
-      reward in [0, 1]
+    - response: 模型输出字符串，包含 <box>[x1,y1,x2,y2]</box> 标签
+    - target_boxes: GT 框列表 [[x1,y1,x2,y2], ...]
+    返回 [0,1] 的标量奖励
     """
-    # ---- 1) Parse predicted boxes from <box>...</box> ----
+    # ---- 1) 解析预测框 ----
     pattern = r"<box>(.*?)</box>"
     matches = re.findall(pattern, response, re.DOTALL)
 
-    pred_boxes = []
+    pred_boxes: List[List[float]] = []
     for match in matches:
         box = match.strip()
         coord_pattern = r'\[(\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*),(\-?\d+\.?\d*)\]'
@@ -117,8 +188,8 @@ def visual_reward(response: str, target_boxes: list) -> float:
             if x1 < x2 and y1 < y2:
                 pred_boxes.append([x1, y1, x2, y2])
 
-    # ---- 2) Sanitize GT boxes ----
-    gt_boxes = []
+    # ---- 2) 清洗 GT 框 ----
+    gt_boxes: List[List[float]] = []
     for b in (target_boxes or []):
         if isinstance(b, (list, tuple)) and len(b) == 4:
             x1, y1, x2, y2 = map(float, b)
@@ -128,50 +199,32 @@ def visual_reward(response: str, target_boxes: list) -> float:
     N = len(pred_boxes)
     M = len(gt_boxes)
 
-    # Corner cases: if there are no preds or no GTs, return 0 reward (conservative).
+    # 角落情形：无预测或无 GT，返回 0（与原逻辑一致）
     if N == 0 or M == 0:
         return 0.0
 
-    # ---- 3) IoU helper for [x1,y1,x2,y2] ----
-    def iou_xyxy(a, b) -> float:
-        ax1, ay1, ax2, ay2 = a
-        bx1, by1, bx2, by2 = b
-        inter_x1 = max(ax1, bx1)
-        inter_y1 = max(ay1, by1)
-        inter_x2 = min(ax2, bx2)
-        inter_y2 = min(ay2, by2)
-        inter_w = max(0.0, inter_x2 - inter_x1)
-        inter_h = max(0.0, inter_y2 - inter_y1)
-        inter_area = inter_w * inter_h
-        area_a = max(0.0, (ax2 - ax1)) * max(0.0, (ay2 - ay1))
-        area_b = max(0.0, (bx2 - bx1)) * max(0.0, (by2 - by1))
-        union = area_a + area_b - inter_area
-        if union <= 0.0:
-            return 0.0
-        return inter_area / union
-
-    # ---- 4) Recall term: average over GTs of best IoU with any prediction ----
-    recall_terms = []
+    # ---- 3) Recall：对每个 GT，取与任一 Pred 的最大传输相似度 ----
+    recall_terms: List[float] = []
     for gt in gt_boxes:
         best = 0.0
         for pred in pred_boxes:
-            best = max(best, iou_xyxy(pred, gt))
+            best = max(best, _transport_similarity(pred, gt))
         recall_terms.append(best)
-    recall_iou = sum(recall_terms) / float(M) if M > 0 else 0.0
+    recall_sim = sum(recall_terms) / float(M) if M > 0 else 0.0
 
-    # ---- 5) Precision term: average over predictions of best IoU with any GT ----
-    precision_terms = []
+    # ---- 4) Precision：对每个 Pred，取与任一 GT 的最大传输相似度 ----
+    precision_terms: List[float] = []
     for pred in pred_boxes:
         best = 0.0
         for gt in gt_boxes:
-            best = max(best, iou_xyxy(gt, pred))
+            best = max(best, _transport_similarity(pred, gt))
         precision_terms.append(best)
-    precision_iou = sum(precision_terms) / float(N) if N > 0 else 0.0
+    precision_sim = sum(precision_terms) / float(N) if N > 0 else 0.0
 
-    # ---- 6) Dual IoU reward ----
-    reward = 0.5 * (recall_iou + precision_iou)
+    # ---- 5) 双侧奖励 ----
+    reward = 0.5 * (recall_sim + precision_sim)
 
-    # Numerical safety
+    # 数值安全
     if reward < 0.0:
         reward = 0.0
     elif reward > 1.0:
@@ -179,26 +232,27 @@ def visual_reward(response: str, target_boxes: list) -> float:
 
     return reward
 
-    
-def compute_score(reward_inputs: list[dict[str, Any]], accuracy_weight: float = 1, format_weight: float = 1, visual_weight: float = 1) -> list[dict[str, float]]:
+
+def compute_score(reward_inputs: list[dict[str, Any]], format_weight: float = 0.1, visual_weight: float = 0.1) -> list[dict[str, float]]:
     '''
-     weights论文中没有给，感觉得调参了
+     visual_weight是视觉奖励的超参数，论文中没有给，感觉得调参了
     '''
     if not isinstance(reward_inputs, list):
         raise ValueError("Please use `reward_type=batch` for math reward function.")
 
-    scores = []  
+    scores = []
     for reward_input in reward_inputs:
         response = re.sub(r"\s*(<|>|/)\s*", r"\1", reward_input["response"])  # handle qwen2.5vl-32b format
         format_score = format_reward(response)
-        accuracy_score = accuracy_reward(response, reward_input["ground_truth"], question=reward_input["question"])
-        ### parsing target bbox
-        target_boxes = parse_bboxes(reward_input["target_instances"]) 
-        visual_score = visual_reward(response, target_boxes) 
-        
+        accuracy_score = accuracy_reward(response, reward_input["ground_truth"])
+        # 解析目标框
+        target_boxes = parse_bboxes(reward_input["target_instances"])
+        # 使用仿射传输相似度版本
+        visual_score = visual_reward(response, target_boxes)
+
         scores.append(
             {
-                "overall":  accuracy_weight*accuracy_score + format_weight*format_score + visual_weight*visual_score, 
+                "overall": (1 - format_weight - visual_weight) * accuracy_score + format_weight * format_score + visual_weight * visual_score,
                 "format": format_score,
                 "accuracy": accuracy_score,
                 "perception": visual_score,
