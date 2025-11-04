@@ -17,7 +17,7 @@ python3 -m verl.trainer.main \
     data.train_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/vstar30k_visdrone6k_x1y1x2y2_train \
     data.val_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/vstar30k_visdrone6k_x1y1x2y2_test \
     data.image_dir=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/ \
-    worker.actor.global_batch_size=192 \
+    worker.actor.global_batch_size=288 \
     worker.actor.model.model_path="${MODEL_PATH}" \
     worker.rollout.gpu_memory_utilization=0.8 \
     trainer.experiment_name=qwen2_5_vl_7b_treebench_grpo_llm_as_judge \
