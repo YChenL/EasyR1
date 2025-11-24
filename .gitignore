@@ -187,3 +187,5 @@ __pycache__/
 .DS_Store
 .env
 
+model/
+data/

@@ -13,7 +13,7 @@ export LLM_AS_A_JUDGE_MODEL="${LLM_AS_A_JUDGE_MODEL:-Qwen2.5-72B-Instruct}"
 MODEL_PATH="/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/model/TreeVGR-7B-CI"
 
 python3 -m verl.trainer.main \
-  config=examples/config_treebench_zhihu.yaml \
+  config=examples/config_treebench.yaml \
   data.train_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/data/vstar30k_visdrone6k_x1y1x2y2.parquet \
   data.val_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/test-vstar30k_visdrone6k_x1y1x2y2.parquet \
   data.image_dir=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/ \
@@ -28,8 +28,8 @@ python3 -m verl.trainer.main \
   worker.rollout.n=8 \
   worker.rollout.gpu_memory_utilization=0.75 \
   worker.rollout.tensor_parallel_size=1 \
-  trainer.experiment_name=qwen2_5_vl_7b_treebench_grpo_llm_as_judge_corrected_pixelsize_zhihu_lr_em6 \
-  worker.reward.reward_function=./examples/reward_function/affine.py:compute_score \
+  trainer.experiment_name=qwen2_5_vl_7b_treebench_grpo_llm_as_judge_corrected_uot \
+  worker.reward.reward_function=./examples/reward_function/uot.py:compute_score \
   trainer.n_gpus_per_node=2 \
   trainer.nnodes=1 \
   trainer.save_freq=25

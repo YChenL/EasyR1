@@ -55,9 +55,9 @@ def _looks_like_mc(a: str, b: str) -> bool:
 
 def get_chat_template():
     chat_template = """
-Below are two answers to a question. Question is [Question], [Standard Answer] is the standard answer to the question, and [Model_answer] is the answer extracted from a model's output to this question.  Determine whether these two answers are consistent.
+Below are two answers to a question.  [Question] is the question, [Standard Answer] is the standard answer to the question, and [Model_answer] is the answer extracted from a model's output to this question.  Determine whether these two answers are consistent.
 Note that [Model Answer] is consistent with [Standard Answer] whenever they are essentially the same. If the meaning is expressed in the same way, it is considered consistent, for example, 'pink' and 'it is pink'.
-If they are consistent, Judement is 1; if they are different, Judement is 0. Just output Judement and don't output anything else.\n\n
+If they are consistent, *Judgement Value* is equal to 1; if they are different, *Judgement Value* is equal to 0. Just output the *Judgement Value* and don't output anything else.\n\n
 """
     return chat_template
 
@@ -67,52 +67,45 @@ def get_gpt4_score_ICE():
 [Question]: Is the countertop tan or blue?
 [Standard Answer]: The countertop is tan.
 [Model_answer] : tan
-Judgement: 1
+*Judgement Value* is 1
 """ # noqa
 
     example_2 = """
 [Question]: On which side of the picture is the barrier?
 [Standard Answer]: The barrier is on the left side of the picture.
-[Model_answer] : left
-Judgement: 1
+[Model_answer] : The barrier lies on the right of the picture.
+*Judgement Value* is 0
 """ # noqa
 
     example_3 = """
 [Question]: Is the kite brown and large?
 [Standard Answer]: Yes, the kite is brown and large.
 [Model_answer] : Yes
-Judgement: 1
+Judgement Value is 1
 """ # noqa
 
     example_4 = """
-[Question]: Are the spots on a giraffe?
-[Standard Answer]: No, the spots are on a banana.
-[Model_answer] : no
-Judgement: 1
-""" # noqa
-
-    example_5 = """
 [Question]: Who is wearing pants?
 [Standard Answer]: The boy is wearing pants.
 [Model_answer] : The person in the picture is wearing pants.
-Judgement: 1
+*Judgement Value* is 1
 """ # noqa
 
-    example_6 = """
+    example_5 = """
 [Question]: Is the man phone both blue and closed?
 [Standard Answer]: Yes, the man phone is both blue and closed.
 [Model_answer] : No.
-Judgement: 0
+*Judgement Value* is 0
 """ # noqa
 
-    example_7 = """
+    example_6 = """
 [Question]: What color is the towel in the center of the picture?
 [Standard Answer]: The towel in the center of the picture is blue.
 [Model_answer] : The towel in the center of the picture is pink.
-Judgement: 0
+*Judgement Value* is 0
 """ # noqa
 
-    return [example_1, example_2, example_3, example_4, example_5, example_6, example_7]
+    return [example_1, example_2, example_3, example_4, example_5, example_6]
 
 
 def get_prompt(predict_str, ground_truth, question):
@@ -124,8 +117,7 @@ def get_prompt(predict_str, ground_truth, question):
     test_prompt = f"""
 [Question]: {question}
 [Standard Answer]: {ground_truth}
-[Model_answer] : {predict_str}
-Judgement:"""
+[Model_answer] : {predict_str}"""
     full_prompt = f'{demo_prompt}{test_prompt}'
 
     return full_prompt
@@ -136,40 +128,40 @@ def _judge_with_llm(ans: str, ground_truth: str, question: str = "") -> float:
     用 Qwen2.5-72B-Instruct 做语义一致性判别：
     等价 -> 'Judgement: 1'；不等价 -> 'Judgement: 0'
     """
-    question_text = extra_info['question']
     full_prompt = get_prompt(ans, ground_truth, question)
 
     resp = _client.chat.completions.create(
         model=model_name,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a careful, deterministic judge. Output ONLY the *Judgement Value* of 1 or 0.."},
             {"role": "user", "content": full_prompt},
         ],
-        seed=random.randint(0, 10**6),
-        temperature=0.3,
+        temperature=0.0,              # 固定判分
+        seed=0,                       # 可复现
+        top_p=1.0,
+        max_tokens=25,                 # 限制续写长度，避免多话
     )
     response = resp.choices[0].message.content.strip()
 
     # print(response)
-    if 'Judgement:' in response:
-        response = response.split('Judgement:')[-1].strip()
-        if '1' in response:
-            acc_reward = 1.0
-        elif '0' in response:
-            acc_reward = 0.0
-        else:
-            print(f' [WARNING] resp format error {response=}')
-            acc_reward = 0.0
+    acc_reward = 0.0
+    verdict = None
+
+    # 解析 "Judgement Value: 1/0"（大小写不敏感；Judgment/Judgement 都接受）
+    m = re.search(r'(?i)\bjudg[e]?ment\s*value\b\s*[:=]?\s*([01])\b', response)
+    if not m:
+        # 兜底：模型只输出 "1" 或 "0"
+        m = re.search(r'^\s*([01])\s*$', response)
+
+    if m:
+        acc_reward = 1.0 if m.group(1) == '1' else 0.0
     else:
-        if response == '1':
-            acc_reward = 1.0
-        elif response == '0':
-            acc_reward = 0.0
-        else:
-            print(f' [WARNING] resp format error {response=}')
-            acc_reward = 0.0
+        print(f' [WARNING] resp format error response={response!r}')
+        acc_reward = 0.0
 
     # Penalize for model trying to predict longer answer to hack llm-as-judge
     if len(ans) >= 1000:
-        acc_reward = 0.0
+        acc_reward = -1.0
         # is_format_error = True
+
+    return acc_reward

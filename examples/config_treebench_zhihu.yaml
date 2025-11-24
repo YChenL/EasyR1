@@ -45,7 +45,7 @@ worker:
       model_path: HaochenWang/TreeVGR-7B-CI #可以改成本地HF模型路径
       enable_gradient_checkpointing: true
       trust_remote_code: false
-      freeze_vision_tower: false
+      freeze_vision_tower: true
     optim:
       lr: 1.0e-6
       weight_decay: 1.0e-2

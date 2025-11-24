@@ -14,8 +14,18 @@
 
 import re, json
 from typing import List, Union, Any
-from .agent import *
 
+import sys,os
+CUR_DIR = os.path.dirname(os.path.abspath(__file__))
+if CUR_DIR not in sys.path:
+    sys.path.insert(0, CUR_DIR)
+
+from agent import (
+    _extract_ans,
+    _looks_like_mc,
+    _tokenize_mc,
+    _judge_with_llm,
+)
 
 def format_reward(response: str) -> float:
     # 满足：先有 <think>…</think>，随后出现 <answer>…</answer> 或 \boxed{…}
@@ -180,10 +190,7 @@ def visual_reward(response: str, target_boxes: list) -> float:
     return reward
 
     
-def compute_score(reward_inputs: list[dict[str, Any]], accuracy_weight: float = 1, format_weight: float = 1, visual_weight: float = 1) -> list[dict[str, float]]:
-    '''
-     weights论文中没有给，感觉得调参了
-    '''
+def compute_score(reward_inputs: list[dict[str, Any]], accuracy_weight: float = 0.9, format_weight: float = 0.1, visual_weight: float = 1) -> list[dict[str, float]]:
     if not isinstance(reward_inputs, list):
         raise ValueError("Please use `reward_type=batch` for math reward function.")
 
