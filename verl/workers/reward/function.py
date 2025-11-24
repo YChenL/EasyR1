@@ -125,6 +125,7 @@ class BatchFunctionRewardManager(FunctionRewardManager):
                     "question": data.non_tensor_batch["question"][i],
                     "ground_truth": data.non_tensor_batch["ground_truth"][i],
                     "target_instances": data.non_tensor_batch["target_instances"][i],
+                    "images": data.non_tensor_batch["multi_modal_data"][i]["images"],
                 }
             )
 
