@@ -3,7 +3,6 @@ data:
   val_files: HaochenWang/TreeVGR-RL-37K@test    #可以改成本地HF数据集路径: 如/data/TreeVGR/train.jsonl@train[90%:]
   prompt_key: problem
   answer_key: answer
-  target_key: target_instances
   image_key: images
   video_key: videos
   image_dir: null

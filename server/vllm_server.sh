@@ -5,9 +5,9 @@ set -euo pipefail
 PORT="${1:-18901}"                               # /v1 所在端口；你的 Python 用 http://<host>:PORT/v1
 HOST="0.0.0.0"                                   # 对外可访问
 
-MODEL_PATH="/mnt/shared-storage-user/solution/gongyuning/models/Qwen2.5-72B-Instruct"  # 本地模型路径
+MODEL_PATH="/mnt/shared-storage-user/solution/gongyuning/models/Qwen3-VL-8B-Instruct"  # 本地模型路径
 
-SERVED_NAME="Qwen2.5-72B-Instruct"               # /v1/models 返回的 id；你的代码里会 fallback 到这个名字
+SERVED_NAME="Qwen3-VL-8B-Instruct"               # /v1/models 返回的 id；你的代码里会 fallback 到这个名字
 API_KEYS="${API_KEYS:-EMPTY}"                     # 和 Python 里的 LLM_AS_A_JUDGE_KEY 对齐
 DTYPE="${DTYPE:-auto}"                            # auto/float16/bfloat16
 MAX_LEN="${MAX_LEN:-8192}"                        # 最大上下文；想省显存可改小如 4096

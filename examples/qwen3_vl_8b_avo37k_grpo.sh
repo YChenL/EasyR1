@@ -10,13 +10,14 @@ export LLM_AS_A_JUDGE_BASE="${LLM_AS_A_JUDGE_BASE:-http://127.0.0.1:8000/v1}"
 export LLM_AS_A_JUDGE_MODEL="${LLM_AS_A_JUDGE_MODEL:-Qwen3-VL-8B-Instruct}"
 
 # 你的8B模型本地路径
-MODEL_PATH="/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/model/Qwen3-VL-8B-Instruct"
+MODEL_PATH="/mnt/shared-storage-user/solution/gongyuning/models/Qwen3-VL-8B-Instruct"
 
 python3 -m verl.trainer.main \
   config=examples/config_avo.yaml \
-  data.train_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/data/vstar30k_visdrone6k_x1y1x2y2.parquet \
-  data.val_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/test-vstar30k_visdrone6k_x1y1x2y2.parquet \
-  data.image_dir=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/ \
+  data.train_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/data/avo_rl_43k.parquet@train[:90%] \
+  data.val_files=/mnt/shared-storage-user/solution/gongyuning/rl-center/EasyR1/data/TreeVGR-RL-37K/data/avo_rl_43k.parquet@train[90%:] \
+  data.image_dir=/mnt/shared-storage-user/solution/gongyuning/LLaVA-NeXT-Data/images \
+  data.target_key=null \
   data.rollout_batch_size=512 \
   data.val_batch_size=512 \
   data.max_response_length=2048 \
